@@ -62,7 +62,6 @@ export default {
                     if (!value) {
                       return true; // Assuming optional if empty
                     }
-                    // If it's NOT HTTPS or HTTP, return an error message
                     if (isHttpsOrHttp(value)) {
                       //needs to change to correct way of returning errors
                       return 'Endpoint cannot start with http:// or https://';
