@@ -4,10 +4,10 @@ import { LabeledInput } from '@components/Form/LabeledInput';
 import SelectOrCreateAuthSecret from '@shell/components/form/SelectOrCreateAuthSecret';
 import { NORMAN } from '@shell/config/types';
 import { _EDIT, _VIEW } from '@shell/config/query-params';
-import { isHttpsOrHttp } from '@shell/utils/validators/setting';
 import CreateEditView from '@shell/mixins/create-edit-view';
 import FormValidation from '@shell/mixins/form-validation';
 import CruResource from '@shell/components/CruResource.vue';
+import { isHttpsOrHttp } from '@shell/utils/validators/setting';
 
 export default {
   emits: ['update:value'],
@@ -55,25 +55,13 @@ export default {
       ...(this.value || {}),
     };
 
-    return { config , 
-            fvRules: { 
-                endpoint: [
-                  (value) => {
-                    if (!value) {
-                      return true; // Assuming optional if empty
-                    }
-                    if (isHttpsOrHttp(value)) {
-                      //needs to change to correct way of returning errors
-                      return 'Endpoint cannot start with http:// or https://';
-                    }
-                    return; 
-                  },
-                ],
-            }
-    }
+    return { config,
+            s3EndpointHasError: false,
+    };
   },
 
   computed: {
+    
     ccData() {
       if ( this.config.cloudCredentialName ) {
         const cred = this.$store.getters['rancher/byId'](NORMAN.CLOUD_CREDENTIAL, this.config.cloudCredentialName);
@@ -91,7 +79,10 @@ export default {
     isView() {
       return this.mode === _VIEW;
     },
-  
+
+    isEndpointInvalid() { 
+        return this.s3EndpointHasError;
+    }
   },
 
   methods: {
@@ -99,28 +90,45 @@ export default {
       const out = { ...this.config };
 
       this.$emit('update:value', out);
+
+      this.validateEndpoint(this.config.endpoint);
+    },
+    isHttpsOrHttp,
+
+    validateEndpoint(value) {
+      let message = '';
+      if (isHttpsOrHttp(value)) {
+        message = this.t('cluster.credential.s3.defaultEndpoint.error');
+        this.s3EndpointHasError = !!message; // Set to true if a message exists, false otherwise
+      }
+
+      return this.s3EndpointHasError;
     },
   },
 
   watch: {
-    fvFormIsValid: {
+    'config.endpoint': {
       handler(newValue) {
-        this.$emit('update:configIsValid', !!newValue);
+        this.validateEndpoint(newValue);
       },
-      immediate: true,
+      immediate: true, 
     },
-  }
+    value: {
+        handler(newValue) {
+            if (newValue?.endpoint !== this.config.endpoint) {
+                this.config.endpoint = newValue?.endpoint || '';
+            }
+            this.validateEndpoint(this.config.endpoint);
+        },
+        deep: true,
+        immediate: true,
+    }
+  },
+  
 };
 </script>
 
 <template>
-<CruResource
-    ref="cruresource"
-    :mode="mode"
-    :resource="value"
-    :validation-passed="fvFormIsValid"
-    :errors="errors"
-  >
   <div>
     <SelectOrCreateAuthSecret
       v-model:value="config.cloudCredentialName"
@@ -174,8 +182,12 @@ export default {
           :disabled="isView"
           :placeholder="ccData.defaultEndpoint"
           @update:value="update"
-          :rules="fvRules.endpoint"
+          :error="s3EndpointHasError"
         />
+        <div v-if="s3EndpointHasError" class="input-error-message">
+          
+          {{ t('cluster.credential.s3.defaultEndpoint.error') }}
+        </div>
       </div>
     </div>
 
@@ -200,5 +212,4 @@ export default {
       />
     </div>
   </div>
-  </CruResource>
 </template>
